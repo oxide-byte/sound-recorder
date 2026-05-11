@@ -90,6 +90,19 @@
 - **FR-004**: System MUST [data requirement, e.g., "persist user preferences"]
 - **FR-005**: System MUST [behavior, e.g., "log all security events"]
 
+### Constitution Alignment *(mandatory)*
+
+- **CA-001 (Rust-First)**: Any non-Rust implementation or new dependency MUST be
+  explicitly justified and approved in planning artifacts.
+- **CA-002 (CLI-First)**: User-facing behavior MUST define deterministic command
+  input/output and explicit error semantics.
+- **CA-003 (Verification Gate)**: Each user story MUST define independent
+  verification (automated tests preferred; manual-only allowed for trivial scope).
+- **CA-004 (Integration Safety)**: Contract or cross-module changes MUST identify
+  required integration validation.
+- **CA-005 (Version Discipline)**: Behavior-breaking changes MUST be called out
+  with semantic-versioning impact.
+
 *Example of marking unclear requirements:*
 
 - **FR-006**: System MUST authenticate users via [NEEDS CLARIFICATION: auth method not specified - email/password, SSO, OAuth?]
