@@ -1,0 +1,9 @@
+{
+  "ai": "junie",
+  "branch_numbering": "sequential",
+  "context_file": ".junie/AGENTS.md",
+  "here": false,
+  "integration": "junie",
+  "script": "sh",
+  "speckit_version": "0.8.8.dev0"
+}
