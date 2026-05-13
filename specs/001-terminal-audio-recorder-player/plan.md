@@ -1,113 +1,102 @@
-# Implementation Plan: [FEATURE]
+# Implementation Plan: Terminal Audio Recorder & Player Spec Alignment
 
-**Branch**: `[###-feature-name]` | **Date**: [DATE] | **Spec**: [link]
-**Input**: Feature specification from `/specs/[###-feature-name]/spec.md`
-
-**Note**: This template is filled in by the `/speckit.plan` command. See `.specify/templates/plan-template.md` for the execution workflow.
+**Branch**: `001-terminal-audio-recorder-player` | **Date**: 2026-05-13 | **Spec**: `specs/001-terminal-audio-recorder-player/spec.md`
+**Input**: Feature specification from `/specs/001-terminal-audio-recorder-player/spec.md`
 
 ## Summary
 
-[Extract from feature spec: primary requirement + technical approach from research]
+Align Speckit planning/design artifacts with `HEAD` behavior (including commit
+`0ed3069`) so documentation reflects the real CLI and audio pipelines for
+`record`, `play`, `list-devices`, and `tui`.
 
 ## Technical Context
 
-<!--
-  ACTION REQUIRED: Replace the content in this section with the technical details
-  for the project. The structure here is presented in advisory capacity to guide
-  the iteration process.
--->
-
-**Language/Version**: [e.g., Python 3.11, Swift 5.9, Rust 1.75 or NEEDS CLARIFICATION]  
-**Primary Dependencies**: [e.g., FastAPI, UIKit, LLVM or NEEDS CLARIFICATION]  
-**Storage**: [if applicable, e.g., PostgreSQL, CoreData, files or N/A]  
-**Testing**: [e.g., pytest, XCTest, cargo test or NEEDS CLARIFICATION]  
-**Target Platform**: [e.g., Linux server, iOS 15+, WASM or NEEDS CLARIFICATION]
-**Project Type**: [e.g., library/cli/web-service/mobile-app/compiler/desktop-app or NEEDS CLARIFICATION]  
-**Performance Goals**: [domain-specific, e.g., 1000 req/s, 10k lines/sec, 60 fps or NEEDS CLARIFICATION]  
-**Constraints**: [domain-specific, e.g., <200ms p95, <100MB memory, offline-capable or NEEDS CLARIFICATION]  
-**Scale/Scope**: [domain-specific, e.g., 10k users, 1M LOC, 50 screens or NEEDS CLARIFICATION]
+**Language/Version**: Rust 2024  
+**Primary Dependencies**: `clap`, `cpal`, `hound`, `thiserror`, `ratatui`, `crossterm`  
+**Storage**: Local filesystem WAV files  
+**Testing**: `cargo test` (`tests/unit`, `tests/integration`)  
+**Target Platform**: Desktop terminal environments with audio I/O support through `cpal`  
+**Project Type**: Single-crate CLI application  
+**Performance Goals**: Deterministic ~10s recording window; prompt validation/exit for invalid playback inputs  
+**Constraints**: Default device selection only in current implementation; deterministic CLI output/error messaging  
+**Scale/Scope**: Local single-user command execution; no network/distributed components
 
 ## Constitution Check
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-- Rust-first scope confirmed: implementation remains Rust-based and dependency
-  additions are justified in-plan.
-- CLI-first behavior defined: inputs/outputs and error paths are specified for
-  deterministic execution.
-- Verification gate defined per story: tests preferred; manual verification only
-  for trivial changes with explicit evidence.
-- Integration safety addressed: cross-module/shared contract changes include
-  integration validation tasks.
-- Simplicity and observability enforced: minimal design, diagnosable failures,
-  and semantic-versioning impact documented when behavior changes.
+### Pre-Phase 0
+
+- ✅ **I. Rust-First, Stable Tooling**: behavior and updates are documentation-only; no runtime or dependency drift.
+- ✅ **II. CLI-First Interaction**: contracts describe clap-driven command flows and deterministic stdout/stderr behaviors.
+- ✅ **III. Testable Delivery Gates**: verification evidence references existing integration/unit tests for command validation.
+- ✅ **IV. Incremental Architecture & Integration Safety**: planning artifacts map shared command/audio contracts across modules.
+- ✅ **V. Observability, Simplicity, and Version Discipline**: docs mirror existing behavior and clearly flag deferred capabilities.
+
+### Post-Phase 1 Re-Check
+
+- ✅ All generated Phase 0/1 artifacts resolve clarifications and remain consistent with constitution gates.
 
 ## Project Structure
 
 ### Documentation (this feature)
 
 ```text
-specs/[###-feature]/
-├── plan.md              # This file (/speckit.plan command output)
-├── research.md          # Phase 0 output (/speckit.plan command)
-├── data-model.md        # Phase 1 output (/speckit.plan command)
-├── quickstart.md        # Phase 1 output (/speckit.plan command)
-├── contracts/           # Phase 1 output (/speckit.plan command)
-└── tasks.md             # Phase 2 output (/speckit.tasks command - NOT created by /speckit.plan)
+specs/001-terminal-audio-recorder-player/
+├── checklists/
+│   └── requirements.md
+├── contracts/
+│   └── cli.md
+├── data-model.md
+├── plan.md
+├── quickstart.md
+├── research.md
+├── spec.md
+└── tasks.md
 ```
 
 ### Source Code (repository root)
-<!--
-  ACTION REQUIRED: Replace the placeholder tree below with the concrete layout
-  for this feature. Delete unused options and expand the chosen structure with
-  real paths (e.g., apps/admin, packages/something). The delivered plan must
-  not include Option labels.
--->
 
 ```text
-# [REMOVE IF UNUSED] Option 1: Single project (DEFAULT)
 src/
-├── models/
-├── services/
+├── audio/
+│   ├── devices.rs
+│   ├── mod.rs
+│   ├── playback.rs
+│   └── record.rs
 ├── cli/
-└── lib/
+│   ├── commands.rs
+│   └── mod.rs
+├── error.rs
+├── lib.rs
+├── main.rs
+├── model/
+│   └── mod.rs
+└── tui/
+    ├── app.rs
+    └── view.rs
 
 tests/
-├── contract/
 ├── integration/
+│   ├── list_devices_cli.rs
+│   ├── play_cli.rs
+│   └── record_cli.rs
+├── integration.rs
 └── unit/
-
-# [REMOVE IF UNUSED] Option 2: Web application (when "frontend" + "backend" detected)
-backend/
-├── src/
-│   ├── models/
-│   ├── services/
-│   └── api/
-└── tests/
-
-frontend/
-├── src/
-│   ├── components/
-│   ├── pages/
-│   └── services/
-└── tests/
-
-# [REMOVE IF UNUSED] Option 3: Mobile + API (when "iOS/Android" detected)
-api/
-└── [same as backend above]
-
-ios/ or android/
-└── [platform-specific structure: feature modules, UI flows, platform tests]
+    ├── playback_validation.rs
+    └── record_validation.rs
 ```
 
-**Structure Decision**: [Document the selected structure and reference the real
-directories captured above]
+**Structure Decision**: Preserve the existing single-crate CLI layout and limit
+this effort to specification/planning artifact alignment.
 
 ## Complexity Tracking
 
-> **Fill ONLY if Constitution Check has violations that must be justified**
+No constitution violations or complexity waivers required.
 
-| Violation | Why Needed | Simpler Alternative Rejected Because |
-|-----------|------------|-------------------------------------|
-| [e.g., 4th project] | [current need] | [why 3 projects insufficient] |
-| [e.g., Repository pattern] | [specific problem] | [why direct DB access insufficient] |
+## Extension Hook Visibility
+
+- **Optional Hook**: `git`
+- **Command**: `/speckit.git.commit`
+- **Description**: Auto-commit after implementation planning (`hooks.after_plan`)
+- **Prompt**: `Commit plan changes?`

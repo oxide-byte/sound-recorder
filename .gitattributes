@@ -1,2 +1,5 @@
-# Samples
 docs/** linguist-vendored
+.junie/** linguist-vendored
+.ollamassist/** linguist-vendored
+.specify/** linguist-vendored
+.specs/** linguist-vendore
