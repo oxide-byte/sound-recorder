@@ -1,9 +1,19 @@
+
 {
   "ai": "junie",
   "branch_numbering": "sequential",
   "context_file": ".junie/AGENTS.md",
   "here": false,
   "integration": "junie",
+  "script": "sh",
+  "speckit_version": "0.8.8.dev0"
+},{
+  "ai": "claude",
+  "ai_skills": true,
+  "branch_numbering": "sequential",
+  "context_file": "CLAUDE.md",
+  "here": false,
+  "integration": "claude",
   "script": "sh",
   "speckit_version": "0.8.8.dev0"
 }

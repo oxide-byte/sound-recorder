@@ -2,6 +2,7 @@
 target/
 debug/
 release/
+/recordings
 *.rs.bk
 *.rlib
 *.prof*
