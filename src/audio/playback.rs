@@ -1,22 +1,29 @@
-use std::path::Path;
-use std::sync::{Arc, Mutex};
-use std::thread;
+use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{mpsc, Arc, Mutex};
+use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 
 use crate::error::AppError;
 
-pub fn play_wav(file: &str, _output_device_id: Option<&str>, volume: u8) -> Result<(), AppError> {
-    if !Path::new(file).exists() {
-        return Err(AppError::InvalidArgument(format!(
-            "file does not exist: {file}"
-        )));
-    }
+pub fn start_playback_thread(
+    stop_flag: Arc<AtomicBool>,
+    tx: mpsc::Sender<Result<(), AppError>>,
+    wav_path: PathBuf,
+) -> JoinHandle<()> {
+    thread::spawn(move || {
+        let result = play_until_stop(stop_flag, &wav_path);
+        let _ = tx.send(result);
+    })
+}
 
-    if volume > 100 {
+fn play_until_stop(stop_flag: Arc<AtomicBool>, file: &std::path::Path) -> Result<(), AppError> {
+    if !file.exists() {
         return Err(AppError::InvalidArgument(format!(
-            "volume must be between 0 and 100, got {volume}"
+            "file does not exist: {}",
+            file.display()
         )));
     }
 
@@ -28,7 +35,6 @@ pub fn play_wav(file: &str, _output_device_id: Option<&str>, volume: u8) -> Resu
         return Err(AppError::Audio("wav file has zero channels".into()));
     }
 
-    let volume_scale = volume as f32 / 100.0;
     let samples = read_samples_as_f32(&mut reader)?;
     if samples.is_empty() {
         return Err(AppError::Audio("wav file contains no samples".into()));
@@ -50,6 +56,8 @@ pub fn play_wav(file: &str, _output_device_id: Option<&str>, volume: u8) -> Resu
     }));
 
     let err_fn = |err| eprintln!("audio output stream error: {err}");
+    let volume_scale = 1.0f32;
+
     let stream = match config.sample_format() {
         cpal::SampleFormat::I16 => {
             let state = Arc::clone(&state);
@@ -64,7 +72,7 @@ pub fn play_wav(file: &str, _output_device_id: Option<&str>, volume: u8) -> Resu
                         output_channels,
                         volume_scale,
                         &state,
-                        |sample| (sample.clamp(-1.0, 1.0) * i16::MAX as f32) as i16,
+                        |s| (s.clamp(-1.0, 1.0) * i16::MAX as f32) as i16,
                     );
                 },
                 err_fn,
@@ -84,10 +92,7 @@ pub fn play_wav(file: &str, _output_device_id: Option<&str>, volume: u8) -> Resu
                         output_channels,
                         volume_scale,
                         &state,
-                        |sample| {
-                            let scaled = sample.clamp(-1.0, 1.0);
-                            ((scaled * 0.5 + 0.5) * u16::MAX as f32) as u16
-                        },
+                        |s| ((s.clamp(-1.0, 1.0) * 0.5 + 0.5) * u16::MAX as f32) as u16,
                     );
                 },
                 err_fn,
@@ -107,16 +112,16 @@ pub fn play_wav(file: &str, _output_device_id: Option<&str>, volume: u8) -> Resu
                         output_channels,
                         volume_scale,
                         &state,
-                        |sample| sample.clamp(-1.0, 1.0),
+                        |s| s.clamp(-1.0, 1.0),
                     );
                 },
                 err_fn,
                 None,
             )
         }
-        sample_format => {
+        fmt => {
             return Err(AppError::Audio(format!(
-                "unsupported output sample format: {sample_format:?}"
+                "unsupported output sample format: {fmt:?}"
             )))
         }
     }
@@ -131,7 +136,7 @@ pub fn play_wav(file: &str, _output_device_id: Option<&str>, volume: u8) -> Resu
             .lock()
             .map_err(|_| AppError::Audio("failed to access playback state".into()))?
             .finished;
-        if finished {
+        if finished || stop_flag.load(Ordering::Relaxed) {
             break;
         }
         thread::sleep(Duration::from_millis(10));
@@ -146,21 +151,22 @@ struct PlaybackState {
     finished: bool,
 }
 
-fn read_samples_as_f32(reader: &mut hound::WavReader<std::io::BufReader<std::fs::File>>) -> Result<Vec<f32>, AppError> {
+fn read_samples_as_f32(
+    reader: &mut hound::WavReader<std::io::BufReader<std::fs::File>>,
+) -> Result<Vec<f32>, AppError> {
     let spec = reader.spec();
     match (spec.sample_format, spec.bits_per_sample) {
         (hound::SampleFormat::Int, 16) => reader
             .samples::<i16>()
-            .map(|sample| {
-                sample
-                    .map(|v| v as f32 / i16::MAX as f32)
+            .map(|s| {
+                s.map(|v| v as f32 / i16::MAX as f32)
                     .map_err(|err| AppError::Audio(format!("failed to read wav samples: {err}")))
             })
             .collect(),
         (hound::SampleFormat::Float, 32) => reader
             .samples::<f32>()
-            .map(|sample| {
-                sample.map_err(|err| AppError::Audio(format!("failed to read wav samples: {err}")) )
+            .map(|s| {
+                s.map_err(|err| AppError::Audio(format!("failed to read wav samples: {err}")))
             })
             .collect(),
         _ => Err(AppError::Audio(format!(
@@ -187,7 +193,7 @@ fn write_output_data<T, F>(
     }
 
     let mut guard = match state.lock() {
-        Ok(guard) => guard,
+        Ok(g) => g,
         Err(_) => return,
     };
 
@@ -201,10 +207,9 @@ fn write_output_data<T, F>(
         }
 
         for (channel_index, out) in frame.iter_mut().enumerate() {
-            let source_channel = channel_index % source_channels;
-            let source_index = guard.frame_index * source_channels + source_channel;
-            let value = samples[source_index] * volume_scale;
-            *out = convert(value);
+            let src_ch = channel_index % source_channels;
+            let src_idx = guard.frame_index * source_channels + src_ch;
+            *out = convert(samples[src_idx] * volume_scale);
         }
 
         guard.frame_index += 1;

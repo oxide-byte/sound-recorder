@@ -1,33 +1,50 @@
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub enum DeviceDirection {
-    Input,
-    Output,
-}
+use std::path::PathBuf;
+use std::sync::atomic::AtomicBool;
+use std::sync::mpsc;
+use std::sync::Arc;
+use std::thread::JoinHandle;
+
+use crate::error::AppError;
 
 #[derive(Debug, Clone)]
-pub struct AudioDevice {
-    pub id: String,
+pub struct WavFileEntry {
     pub name: String,
-    pub direction: DeviceDirection,
-    pub is_available: bool,
+    pub path: PathBuf,
 }
 
-#[derive(Debug, Clone)]
-pub struct RecordingSession {
-    pub input_device_id: Option<String>,
-    pub output_path: String,
-    pub status: String,
+pub struct RecordingHandle {
+    pub stop_flag: Arc<AtomicBool>,
+    pub result_rx: mpsc::Receiver<Result<PathBuf, AppError>>,
+    pub thread: JoinHandle<()>,
 }
 
-#[derive(Debug, Clone)]
-pub struct WavAsset {
-    pub path: String,
-    pub duration_ms: Option<u64>,
+pub struct PlaybackHandle {
+    pub stop_flag: Arc<AtomicBool>,
+    pub result_rx: mpsc::Receiver<Result<(), AppError>>,
+    pub thread: JoinHandle<()>,
+    pub source_path: PathBuf,
 }
 
-#[derive(Debug, Clone)]
-pub struct PlaybackRequest {
-    pub wav_path: String,
-    pub output_device_id: Option<String>,
-    pub volume: u8,
+pub enum AppState {
+    Idle,
+    Recording(RecordingHandle),
+    Playing(PlaybackHandle),
+}
+
+pub struct TuiContext {
+    pub selected_index: Option<usize>,
+    pub wav_files: Vec<WavFileEntry>,
+    pub status_message: Option<String>,
+    pub app_state: AppState,
+}
+
+impl TuiContext {
+    pub fn new() -> Self {
+        Self {
+            selected_index: None,
+            wav_files: Vec::new(),
+            status_message: None,
+            app_state: AppState::Idle,
+        }
+    }
 }

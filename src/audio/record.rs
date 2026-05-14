@@ -1,59 +1,86 @@
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
-use std::thread;
-use std::time::Duration;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{mpsc, Arc, Mutex};
+use std::thread::{self, JoinHandle};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 
 use crate::error::AppError;
-use crate::model::RecordingSession;
 
-const DEFAULT_RECORDING_DURATION: Duration = Duration::from_secs(10);
-
-pub fn validate_record_request(output: &str) -> Result<(), AppError> {
-    if output.trim().is_empty() {
-        return Err(AppError::InvalidArgument("output path cannot be empty".into()));
-    }
-
-    let output_path = Path::new(output);
-    if let Some(parent) = output_path.parent()
-        && !parent.as_os_str().is_empty()
-        && !parent.exists()
-    {
-        return Err(AppError::InvalidArgument(format!(
-            "output directory does not exist: {}",
-            parent.display()
-        )));
-    }
-
+pub fn ensure_recordings_dir(dir: &Path) -> Result<(), AppError> {
+    fs::create_dir_all(dir)?;
     Ok(())
 }
 
-pub fn record_to_wav(output: &str, _input_device_id: Option<&str>) -> Result<(), AppError> {
-    validate_record_request(output)?;
+pub fn generate_wav_filename() -> String {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default();
+    let secs = now.as_secs();
+    let millis = now.subsec_millis();
 
-    let output_path = PathBuf::from(output);
-    let temp_path = output_path.with_extension("tmp.wav");
+    let time_of_day = secs % 86400;
+    let hh = time_of_day / 3600;
+    let mm = (time_of_day % 3600) / 60;
+    let ss = time_of_day % 60;
 
-    let result = record_microphone_to_wav(&temp_path, DEFAULT_RECORDING_DURATION);
+    let days = secs / 86400;
+    let (year, month, day) = days_to_ymd(days);
+
+    format!(
+        "recording_{year:04}{month:02}{day:02}_{hh:02}{mm:02}{ss:02}_{millis:03}.wav"
+    )
+}
+
+fn days_to_ymd(days: u64) -> (u64, u64, u64) {
+    let z = days as i64 + 719468;
+    let era = (if z >= 0 { z } else { z - 146096 }) / 146097;
+    let doe = z - era * 146097;
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    let y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = if m <= 2 { y + 1 } else { y };
+    (y as u64, m as u64, d as u64)
+}
+
+pub fn start_recording_thread(
+    stop_flag: Arc<AtomicBool>,
+    tx: mpsc::Sender<Result<PathBuf, AppError>>,
+    recordings_dir: PathBuf,
+) -> JoinHandle<()> {
+    thread::spawn(move || {
+        let result = record_until_stop(stop_flag, &recordings_dir);
+        let _ = tx.send(result);
+    })
+}
+
+fn record_until_stop(
+    stop_flag: Arc<AtomicBool>,
+    recordings_dir: &Path,
+) -> Result<PathBuf, AppError> {
+    let filename = generate_wav_filename();
+    let final_path = recordings_dir.join(&filename);
+    let temp_path = final_path.with_extension("tmp.wav");
+
+    let result = record_microphone_until_stop(Arc::clone(&stop_flag), &temp_path);
     if let Err(err) = result {
         let _ = fs::remove_file(&temp_path);
         return Err(err);
     }
 
-    fs::rename(&temp_path, &output_path)?;
-
-    let _session = RecordingSession {
-        input_device_id: None,
-        output_path: output.to_string(),
-        status: "completed".to_string(),
-    };
-
-    Ok(())
+    fs::rename(&temp_path, &final_path)?;
+    Ok(final_path)
 }
 
-fn record_microphone_to_wav(path: &Path, duration: Duration) -> Result<(), AppError> {
+fn record_microphone_until_stop(
+    stop_flag: Arc<AtomicBool>,
+    path: &Path,
+) -> Result<(), AppError> {
     let host = cpal::default_host();
     let device = host
         .default_input_device()
@@ -70,12 +97,12 @@ fn record_microphone_to_wav(path: &Path, duration: Duration) -> Result<(), AppEr
 
     let stream = match config.sample_format() {
         cpal::SampleFormat::I16 => {
-            let capture_buffer = Arc::clone(&captured_samples);
+            let buf = Arc::clone(&captured_samples);
             device.build_input_stream(
                 &config.clone().into(),
                 move |data: &[i16], _| {
-                    if let Ok(mut buffer) = capture_buffer.lock() {
-                        buffer.extend_from_slice(data);
+                    if let Ok(mut b) = buf.lock() {
+                        b.extend_from_slice(data);
                     }
                 },
                 err_fn,
@@ -83,12 +110,12 @@ fn record_microphone_to_wav(path: &Path, duration: Duration) -> Result<(), AppEr
             )
         }
         cpal::SampleFormat::U16 => {
-            let capture_buffer = Arc::clone(&captured_samples);
+            let buf = Arc::clone(&captured_samples);
             device.build_input_stream(
                 &config.clone().into(),
                 move |data: &[u16], _| {
-                    if let Ok(mut buffer) = capture_buffer.lock() {
-                        buffer.extend(data.iter().map(|sample| (*sample as i32 - 32_768) as i16));
+                    if let Ok(mut b) = buf.lock() {
+                        b.extend(data.iter().map(|s| (*s as i32 - 32_768) as i16));
                     }
                 },
                 err_fn,
@@ -96,14 +123,13 @@ fn record_microphone_to_wav(path: &Path, duration: Duration) -> Result<(), AppEr
             )
         }
         cpal::SampleFormat::F32 => {
-            let capture_buffer = Arc::clone(&captured_samples);
+            let buf = Arc::clone(&captured_samples);
             device.build_input_stream(
                 &config.clone().into(),
                 move |data: &[f32], _| {
-                    if let Ok(mut buffer) = capture_buffer.lock() {
-                        buffer.extend(data.iter().map(|sample| {
-                            let clamped = sample.clamp(-1.0, 1.0);
-                            (clamped * i16::MAX as f32) as i16
+                    if let Ok(mut b) = buf.lock() {
+                        b.extend(data.iter().map(|s| {
+                            (s.clamp(-1.0, 1.0) * i16::MAX as f32) as i16
                         }));
                     }
                 },
@@ -111,9 +137,9 @@ fn record_microphone_to_wav(path: &Path, duration: Duration) -> Result<(), AppEr
                 None,
             )
         }
-        sample_format => {
+        fmt => {
             return Err(AppError::Audio(format!(
-                "unsupported sample format: {sample_format:?}"
+                "unsupported sample format: {fmt:?}"
             )))
         }
     }
@@ -123,7 +149,9 @@ fn record_microphone_to_wav(path: &Path, duration: Duration) -> Result<(), AppEr
         .play()
         .map_err(|err| AppError::Audio(format!("failed to start input stream: {err}")))?;
 
-    thread::sleep(duration);
+    while !stop_flag.load(Ordering::Relaxed) {
+        thread::sleep(Duration::from_millis(50));
+    }
     drop(stream);
 
     let samples = captured_samples
