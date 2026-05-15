@@ -4,7 +4,7 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, List, ListItem, ListState, Paragraph};
 
-use crate::model::{AppState, TuiContext};
+use crate::model::{AppState, MonitoringSubState, TuiContext};
 
 pub fn render(frame: &mut Frame, ctx: &TuiContext) {
     let chunks = Layout::default()
@@ -19,9 +19,25 @@ pub fn render(frame: &mut Frame, ctx: &TuiContext) {
     let is_recording = matches!(ctx.app_state, AppState::Recording(_));
     let is_playing = matches!(ctx.app_state, AppState::Playing(_));
     let is_idle = matches!(ctx.app_state, AppState::Idle);
+    let is_monitoring = matches!(ctx.app_state, AppState::Monitoring(_));
+    let is_capturing = if let AppState::Monitoring(ref h) = ctx.app_state {
+        matches!(h.sub_state, MonitoringSubState::Capturing)
+    } else {
+        false
+    };
 
     let record_style = if is_recording {
         Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
+    } else if is_idle {
+        Style::default().fg(Color::Green)
+    } else {
+        Style::default().fg(Color::DarkGray)
+    };
+
+    let monitor_style = if is_monitoring || is_capturing {
+        Style::default()
+            .fg(Color::Yellow)
+            .add_modifier(Modifier::BOLD)
     } else if is_idle {
         Style::default().fg(Color::Green)
     } else {
@@ -36,7 +52,7 @@ pub fn render(frame: &mut Frame, ctx: &TuiContext) {
         Style::default().fg(Color::DarkGray)
     };
 
-    let stop_style = if is_recording || is_playing {
+    let stop_style = if is_recording || is_playing || is_monitoring {
         Style::default()
             .fg(Color::Yellow)
             .add_modifier(Modifier::BOLD)
@@ -46,6 +62,8 @@ pub fn render(frame: &mut Frame, ctx: &TuiContext) {
 
     let button_line = Line::from(vec![
         Span::styled(" [ Record ] ", record_style),
+        Span::raw("  "),
+        Span::styled(" [ Monitor ] ", monitor_style),
         Span::raw("  "),
         Span::styled(" [ Play ] ", play_style),
         Span::raw("  "),
@@ -94,15 +112,19 @@ pub fn render(frame: &mut Frame, ctx: &TuiContext) {
         .highlight_symbol("▸ ");
     frame.render_stateful_widget(list, chunks[1], &mut list_state);
 
-    let status_text = ctx.status_message.as_deref().unwrap_or({
-        if ctx.wav_files.is_empty() {
-            "Ready — press 'r' to record"
-        } else if is_idle {
-            "Ready — ↑/↓ select  r record  p play  q quit"
-        } else {
-            ""
-        }
-    });
+    let status_text = if is_capturing {
+        "Capturing — sound detected, recording segment…  's' to stop"
+    } else {
+        ctx.status_message.as_deref().unwrap_or({
+            if ctx.wav_files.is_empty() {
+                "Ready — press 'r' to record or 'm' to monitor"
+            } else if is_idle {
+                "Ready — ↑/↓ select  r record  m monitor  p play  q quit"
+            } else {
+                ""
+            }
+        })
+    };
 
     let is_error = ctx
         .status_message
@@ -112,6 +134,8 @@ pub fn render(frame: &mut Frame, ctx: &TuiContext) {
 
     let status_style = if is_error {
         Style::default().fg(Color::Red)
+    } else if is_capturing || is_monitoring {
+        Style::default().fg(Color::Yellow)
     } else if is_recording {
         Style::default().fg(Color::Red)
     } else if is_playing {

@@ -25,10 +25,32 @@ pub struct PlaybackHandle {
     pub source_path: PathBuf,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum MonitoringSubState {
+    Listening,
+    Capturing,
+}
+
+pub enum MonitorEvent {
+    SubStateChanged(MonitoringSubState),
+    SegmentSaved(PathBuf),
+    SegmentDiscarded { reason: String },
+    ContinuousTriggering,
+    Failed(AppError),
+}
+
+pub struct MonitoringHandle {
+    pub stop_flag: Arc<AtomicBool>,
+    pub event_rx: mpsc::Receiver<MonitorEvent>,
+    pub thread: JoinHandle<()>,
+    pub sub_state: MonitoringSubState,
+}
+
 pub enum AppState {
     Idle,
     Recording(RecordingHandle),
     Playing(PlaybackHandle),
+    Monitoring(MonitoringHandle),
 }
 
 pub struct TuiContext {
