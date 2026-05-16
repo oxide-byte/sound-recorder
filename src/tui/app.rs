@@ -42,7 +42,7 @@ pub fn run_event_loop<B: Backend>(
     loop {
         terminal
             .draw(|f| crate::tui::view::render(f, ctx))
-            .map_err(AppError::Io)?;
+            .map_err(|e| AppError::Audio(format!("terminal draw error: {e}")))?;
 
         check_audio_completion(ctx);
 

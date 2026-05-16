@@ -182,7 +182,7 @@ fn run_monitor(
         .default_input_config()
         .map_err(|e| AppError::Audio(format!("failed to get input config: {e}")))?;
 
-    let sample_rate = stream_config.sample_rate().0;
+    let sample_rate = stream_config.sample_rate();
     let channels = stream_config.channels();
     let shared_buf: Arc<Mutex<Vec<i16>>> = Arc::new(Mutex::new(Vec::new()));
 

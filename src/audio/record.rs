@@ -94,7 +94,7 @@ fn record_microphone_until_stop(
         .default_input_config()
         .map_err(|err| AppError::Audio(format!("failed to get input config: {err}")))?;
 
-    let sample_rate = config.sample_rate().0;
+    let sample_rate = config.sample_rate();
     let channels = config.channels();
     let captured_samples = Arc::new(Mutex::new(Vec::<i16>::new()));
     let err_fn = |err| eprintln!("audio input stream error: {err}");
