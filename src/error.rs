@@ -8,4 +8,6 @@ pub enum AppError {
     Audio(String),
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),
+    #[error("config error: {0}")]
+    Config(String),
 }

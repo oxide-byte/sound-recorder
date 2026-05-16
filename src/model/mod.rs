@@ -6,6 +6,85 @@ use std::thread::JoinHandle;
 
 use crate::error::AppError;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SupportedFormat {
+    Wav,
+}
+
+impl SupportedFormat {
+    pub fn from_id(s: &str) -> Result<Self, AppError> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "wav" => Ok(SupportedFormat::Wav),
+            other => Err(AppError::Config(format!(
+                "unsupported format '{other}'; supported: wav"
+            ))),
+        }
+    }
+
+    pub fn as_id(&self) -> &'static str {
+        match self {
+            SupportedFormat::Wav => "wav",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CompressionProfile {
+    Pcm8,
+    Pcm16,
+    Pcm24,
+    Float32,
+}
+
+impl CompressionProfile {
+    pub fn from_id(s: &str) -> Result<Self, AppError> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "pcm8" => Ok(CompressionProfile::Pcm8),
+            "pcm16" => Ok(CompressionProfile::Pcm16),
+            "pcm24" => Ok(CompressionProfile::Pcm24),
+            "float32" => Ok(CompressionProfile::Float32),
+            other => Err(AppError::Config(format!(
+                "unsupported compression '{other}'; supported: pcm8, pcm16, pcm24, float32"
+            ))),
+        }
+    }
+
+    pub fn as_id(&self) -> &'static str {
+        match self {
+            CompressionProfile::Pcm8 => "pcm8",
+            CompressionProfile::Pcm16 => "pcm16",
+            CompressionProfile::Pcm24 => "pcm24",
+            CompressionProfile::Float32 => "float32",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AudioOutputProfile {
+    pub format: SupportedFormat,
+    pub compression: CompressionProfile,
+}
+
+impl AudioOutputProfile {
+    pub fn validated(
+        format: SupportedFormat,
+        compression: CompressionProfile,
+    ) -> Result<Self, AppError> {
+        match (format, compression) {
+            (SupportedFormat::Wav, _) => Ok(Self { format, compression }),
+        }
+    }
+}
+
+impl Default for AudioOutputProfile {
+    fn default() -> Self {
+        Self {
+            format: SupportedFormat::Wav,
+            compression: CompressionProfile::Pcm16,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct WavFileEntry {
     pub name: String,
@@ -58,6 +137,7 @@ pub struct TuiContext {
     pub wav_files: Vec<WavFileEntry>,
     pub status_message: Option<String>,
     pub app_state: AppState,
+    pub defaults: Option<crate::config::AudioDefaultsConfig>,
 }
 
 impl TuiContext {
@@ -67,6 +147,7 @@ impl TuiContext {
             wav_files: Vec::new(),
             status_message: None,
             app_state: AppState::Idle,
+            defaults: None,
         }
     }
 }

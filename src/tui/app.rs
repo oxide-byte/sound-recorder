@@ -221,12 +221,21 @@ fn handle_record(ctx: &mut TuiContext) -> Result<(), AppError> {
         return Ok(());
     }
 
+    let Some(defaults) = ctx.defaults.as_ref() else {
+        ctx.status_message = Some(
+            "Audio defaults invalid — fix config/audio.conf".to_string(),
+        );
+        return Ok(());
+    };
+    let profile = defaults.profile;
+
     let recordings_dir = PathBuf::from("recordings");
     audio::record::ensure_recordings_dir(&recordings_dir)?;
 
     let stop_flag = Arc::new(AtomicBool::new(false));
     let (tx, rx) = mpsc::channel();
-    let thread = audio::record::start_recording_thread(Arc::clone(&stop_flag), tx, recordings_dir);
+    let thread =
+        audio::record::start_recording_thread(Arc::clone(&stop_flag), tx, recordings_dir, profile);
 
     ctx.app_state = AppState::Recording(RecordingHandle {
         stop_flag,
@@ -246,12 +255,21 @@ fn handle_monitor(ctx: &mut TuiContext) -> Result<(), AppError> {
         return Ok(());
     }
 
+    let Some(defaults) = ctx.defaults.as_ref() else {
+        ctx.status_message = Some(
+            "Audio defaults invalid — fix config/audio.conf".to_string(),
+        );
+        return Ok(());
+    };
+    let profile = defaults.profile;
+
     let recordings_dir = PathBuf::from("recordings");
     audio::record::ensure_recordings_dir(&recordings_dir)?;
 
     let stop_flag = Arc::new(AtomicBool::new(false));
     let (tx, rx) = mpsc::channel();
-    let config = audio::monitor::MonitorConfig::default();
+    let mut config = audio::monitor::MonitorConfig::default();
+    config.output_profile = profile;
     let thread = audio::monitor::start_monitoring_thread(
         Arc::clone(&stop_flag),
         tx,
@@ -454,5 +472,35 @@ mod tests {
 
         assert!(matches!(ctx.app_state, AppState::Idle));
         assert_eq!(ctx.status_message, None, "Stopping… should be cleared on clean exit");
+    }
+
+    // ── US3: defaults gate ────────────────────────────────────────────────────
+
+    #[test]
+    fn test_handle_record_is_gated_when_defaults_missing() {
+        let mut ctx = TuiContext::new();
+        assert!(ctx.defaults.is_none());
+
+        handle_record(&mut ctx).unwrap();
+
+        assert!(matches!(ctx.app_state, AppState::Idle));
+        assert_eq!(
+            ctx.status_message.as_deref(),
+            Some("Audio defaults invalid — fix config/audio.conf"),
+        );
+    }
+
+    #[test]
+    fn test_handle_monitor_is_gated_when_defaults_missing() {
+        let mut ctx = TuiContext::new();
+        assert!(ctx.defaults.is_none());
+
+        handle_monitor(&mut ctx).unwrap();
+
+        assert!(matches!(ctx.app_state, AppState::Idle));
+        assert_eq!(
+            ctx.status_message.as_deref(),
+            Some("Audio defaults invalid — fix config/audio.conf"),
+        );
     }
 }

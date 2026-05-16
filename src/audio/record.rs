@@ -8,6 +8,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 
 use crate::error::AppError;
+use crate::model::{AudioOutputProfile, CompressionProfile, SupportedFormat};
 
 pub fn ensure_recordings_dir(dir: &Path) -> Result<(), AppError> {
     fs::create_dir_all(dir)?;
@@ -52,9 +53,10 @@ pub fn start_recording_thread(
     stop_flag: Arc<AtomicBool>,
     tx: mpsc::Sender<Result<PathBuf, AppError>>,
     recordings_dir: PathBuf,
+    profile: AudioOutputProfile,
 ) -> JoinHandle<()> {
     thread::spawn(move || {
-        let result = record_until_stop(stop_flag, &recordings_dir);
+        let result = record_until_stop(stop_flag, &recordings_dir, profile);
         let _ = tx.send(result);
     })
 }
@@ -62,12 +64,13 @@ pub fn start_recording_thread(
 fn record_until_stop(
     stop_flag: Arc<AtomicBool>,
     recordings_dir: &Path,
+    profile: AudioOutputProfile,
 ) -> Result<PathBuf, AppError> {
     let filename = generate_wav_filename();
     let final_path = recordings_dir.join(&filename);
     let temp_path = final_path.with_extension("tmp.wav");
 
-    let result = record_microphone_until_stop(Arc::clone(&stop_flag), &temp_path);
+    let result = record_microphone_until_stop(Arc::clone(&stop_flag), &temp_path, profile);
     if let Err(err) = result {
         let _ = fs::remove_file(&temp_path);
         return Err(err);
@@ -80,6 +83,7 @@ fn record_until_stop(
 fn record_microphone_until_stop(
     stop_flag: Arc<AtomicBool>,
     path: &Path,
+    profile: AudioOutputProfile,
 ) -> Result<(), AppError> {
     let host = cpal::default_host();
     let device = host
@@ -164,20 +168,71 @@ fn record_microphone_until_stop(
         ));
     }
 
+    write_samples_to_wav(path, &samples, sample_rate, channels, profile)
+}
+
+/// Writes a buffer of `i16` samples to a WAV file using the bit-depth/sample-format
+/// dispatch table from `specs/004-audio-format-compression/contracts/output-profile.md`.
+pub fn write_samples_to_wav(
+    path: &Path,
+    samples: &[i16],
+    sample_rate: u32,
+    channels: u16,
+    profile: AudioOutputProfile,
+) -> Result<(), AppError> {
+    match profile.format {
+        SupportedFormat::Wav => {}
+    }
+
+    let (sample_format, bits_per_sample) = match profile.compression {
+        CompressionProfile::Pcm8 => (hound::SampleFormat::Int, 8u16),
+        CompressionProfile::Pcm16 => (hound::SampleFormat::Int, 16u16),
+        CompressionProfile::Pcm24 => (hound::SampleFormat::Int, 24u16),
+        CompressionProfile::Float32 => (hound::SampleFormat::Float, 32u16),
+    };
+
     let spec = hound::WavSpec {
         channels,
         sample_rate,
-        bits_per_sample: 16,
-        sample_format: hound::SampleFormat::Int,
+        bits_per_sample,
+        sample_format,
     };
 
     let mut writer = hound::WavWriter::create(path, spec)
         .map_err(|err| AppError::Audio(format!("failed to create wav: {err}")))?;
 
-    for sample in samples.iter().copied() {
-        writer
-            .write_sample(sample)
-            .map_err(|err| AppError::Audio(format!("failed to write sample: {err}")))?;
+    match profile.compression {
+        CompressionProfile::Pcm8 => {
+            for &s in samples {
+                let s8 = (s >> 8) as i8;
+                writer
+                    .write_sample(s8)
+                    .map_err(|err| AppError::Audio(format!("failed to write sample: {err}")))?;
+            }
+        }
+        CompressionProfile::Pcm16 => {
+            for &s in samples {
+                writer
+                    .write_sample(s)
+                    .map_err(|err| AppError::Audio(format!("failed to write sample: {err}")))?;
+            }
+        }
+        CompressionProfile::Pcm24 => {
+            for &s in samples {
+                let s24 = (s as i32) << 8;
+                writer
+                    .write_sample(s24)
+                    .map_err(|err| AppError::Audio(format!("failed to write sample: {err}")))?;
+            }
+        }
+        CompressionProfile::Float32 => {
+            for &s in samples {
+                let sf = s as f32 / i16::MAX as f32;
+                writer
+                    .write_sample(sf)
+                    .map_err(|err| AppError::Audio(format!("failed to write sample: {err}")))?;
+            }
+        }
     }
 
     writer
@@ -185,4 +240,84 @@ fn record_microphone_until_stop(
         .map_err(|err| AppError::Audio(format!("failed to finalize wav: {err}")))?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn temp_path(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "sound_recorder_record_test_{}",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .subsec_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir.join(name)
+    }
+
+    fn synth_samples() -> Vec<i16> {
+        (0..2048i32).map(|n| ((n * 31) as i16).wrapping_mul(2)).collect()
+    }
+
+    fn write_and_read_spec(profile: AudioOutputProfile) -> hound::WavSpec {
+        let path = temp_path(&format!("{}_{}.wav", profile.format.as_id(), profile.compression.as_id()));
+        let samples = synth_samples();
+        write_samples_to_wav(&path, &samples, 44_100, 1, profile).unwrap();
+        let reader = hound::WavReader::open(&path).unwrap();
+        let spec = reader.spec();
+        let _ = std::fs::remove_file(&path);
+        spec
+    }
+
+    #[test]
+    fn writer_dispatches_pcm8() {
+        let spec = write_and_read_spec(AudioOutputProfile {
+            format: SupportedFormat::Wav,
+            compression: CompressionProfile::Pcm8,
+        });
+        assert_eq!(spec.sample_format, hound::SampleFormat::Int);
+        assert_eq!(spec.bits_per_sample, 8);
+    }
+
+    #[test]
+    fn writer_dispatches_pcm16() {
+        let spec = write_and_read_spec(AudioOutputProfile::default());
+        assert_eq!(spec.sample_format, hound::SampleFormat::Int);
+        assert_eq!(spec.bits_per_sample, 16);
+    }
+
+    #[test]
+    fn writer_dispatches_pcm24() {
+        let spec = write_and_read_spec(AudioOutputProfile {
+            format: SupportedFormat::Wav,
+            compression: CompressionProfile::Pcm24,
+        });
+        assert_eq!(spec.sample_format, hound::SampleFormat::Int);
+        assert_eq!(spec.bits_per_sample, 24);
+    }
+
+    #[test]
+    fn writer_dispatches_float32() {
+        let spec = write_and_read_spec(AudioOutputProfile {
+            format: SupportedFormat::Wav,
+            compression: CompressionProfile::Float32,
+        });
+        assert_eq!(spec.sample_format, hound::SampleFormat::Float);
+        assert_eq!(spec.bits_per_sample, 32);
+    }
+
+    #[test]
+    fn writer_preserves_sample_rate_and_channels() {
+        let path = temp_path("preserve.wav");
+        let samples = synth_samples();
+        write_samples_to_wav(&path, &samples, 48_000, 2, AudioOutputProfile::default()).unwrap();
+        let reader = hound::WavReader::open(&path).unwrap();
+        let spec = reader.spec();
+        assert_eq!(spec.channels, 2);
+        assert_eq!(spec.sample_rate, 48_000);
+        let _ = std::fs::remove_file(&path);
+    }
 }

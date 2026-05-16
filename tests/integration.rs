@@ -4,3 +4,5 @@ mod list_devices_cli;
 mod play_cli;
 #[path = "integration/record_cli.rs"]
 mod record_cli;
+#[path = "integration/config_record.rs"]
+mod config_record;

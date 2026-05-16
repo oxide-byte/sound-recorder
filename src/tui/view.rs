@@ -70,8 +70,16 @@ pub fn render(frame: &mut Frame, ctx: &TuiContext) {
         Span::styled(" [ Stop ] ", stop_style),
     ]);
 
+    let title = match &ctx.defaults {
+        Some(d) => format!(
+            " sound-recorder — {}/{} ",
+            d.profile.format.as_id(),
+            d.profile.compression.as_id()
+        ),
+        None => " sound-recorder — config error ".to_string(),
+    };
     let buttons =
-        Paragraph::new(button_line).block(Block::default().borders(Borders::ALL).title(" sound-recorder "));
+        Paragraph::new(button_line).block(Block::default().borders(Borders::ALL).title(title));
     frame.render_widget(buttons, chunks[0]);
 
     let items: Vec<ListItem> = ctx

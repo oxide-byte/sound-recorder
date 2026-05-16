@@ -1,4 +1,5 @@
 mod audio;
+mod config;
 mod error;
 mod model;
 mod tui;

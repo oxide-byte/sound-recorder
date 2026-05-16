@@ -10,6 +10,8 @@ use ratatui::backend::CrosstermBackend;
 use std::io;
 use std::panic;
 
+use crate::config;
+use crate::config::ConfigSource;
 use crate::error::AppError;
 use crate::model::TuiContext;
 
@@ -35,6 +37,21 @@ pub fn run_tui() -> Result<(), AppError> {
     ctx.wav_files = app::scan_wav_files(recordings_dir);
     if !ctx.wav_files.is_empty() {
         ctx.selected_index = Some(0);
+    }
+
+    match config::load_or_default(std::path::Path::new("config/audio.conf")) {
+        Ok(defaults) => {
+            if defaults.source == ConfigSource::Fallback {
+                ctx.status_message =
+                    Some("Using built-in defaults — config/audio.conf not found.".to_string());
+            }
+            ctx.defaults = Some(defaults);
+        }
+        Err(e) => {
+            ctx.status_message = Some(format!(
+                "Audio defaults invalid — fix config/audio.conf: {e}"
+            ));
+        }
     }
 
     let result = app::run_event_loop(&mut terminal, &mut ctx);

@@ -8,9 +8,9 @@ use std::time::{Duration, Instant};
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 
-use crate::audio::record::generate_wav_filename;
+use crate::audio::record::{generate_wav_filename, write_samples_to_wav};
 use crate::error::AppError;
-use crate::model::{MonitorEvent, MonitoringSubState};
+use crate::model::{AudioOutputProfile, MonitorEvent, MonitoringSubState};
 
 // ── Configuration ─────────────────────────────────────────────────────────────
 
@@ -23,6 +23,8 @@ pub struct MonitorConfig {
     pub pre_roll: Duration,
     /// Minimum finalized segment duration; shorter segments are discarded.
     pub min_clip_duration: Duration,
+    /// Output format/compression applied to each finalized segment.
+    pub output_profile: AudioOutputProfile,
 }
 
 impl Default for MonitorConfig {
@@ -32,6 +34,7 @@ impl Default for MonitorConfig {
             silence_timeout: Duration::from_millis(1500),
             pre_roll: Duration::from_millis(400),
             min_clip_duration: Duration::from_millis(500),
+            output_profile: AudioOutputProfile::default(),
         }
     }
 }
@@ -123,7 +126,13 @@ fn finalize_or_discard(
     let final_path = recordings_dir.join(&seg.start_timestamp);
     let temp_path = final_path.with_extension("tmp.wav");
 
-    match write_wav_file(&temp_path, &seg.samples, seg.sample_rate, seg.channels) {
+    match write_samples_to_wav(
+        &temp_path,
+        &seg.samples,
+        seg.sample_rate,
+        seg.channels,
+        config.output_profile,
+    ) {
         Ok(()) => match fs::rename(&temp_path, &final_path) {
             Ok(()) => {
                 let _ = tx.send(MonitorEvent::SegmentSaved(final_path));
@@ -139,31 +148,6 @@ fn finalize_or_discard(
             let _ = tx.send(MonitorEvent::Failed(e));
         }
     }
-}
-
-fn write_wav_file(
-    path: &Path,
-    samples: &[i16],
-    sample_rate: u32,
-    channels: u16,
-) -> Result<(), AppError> {
-    let spec = hound::WavSpec {
-        channels,
-        sample_rate,
-        bits_per_sample: 16,
-        sample_format: hound::SampleFormat::Int,
-    };
-    let mut writer = hound::WavWriter::create(path, spec)
-        .map_err(|e| AppError::Audio(format!("failed to create wav: {e}")))?;
-    for &sample in samples {
-        writer
-            .write_sample(sample)
-            .map_err(|e| AppError::Audio(format!("failed to write sample: {e}")))?;
-    }
-    writer
-        .finalize()
-        .map_err(|e| AppError::Audio(format!("failed to finalize wav: {e}")))?;
-    Ok(())
 }
 
 // ── Thread entry point ────────────────────────────────────────────────────────
@@ -351,12 +335,17 @@ mod tests {
     use std::sync::mpsc;
 
     fn make_temp_dir() -> PathBuf {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        static COUNTER: AtomicUsize = AtomicUsize::new(0);
+        let n = COUNTER.fetch_add(1, Ordering::SeqCst);
         let dir = std::env::temp_dir().join(format!(
-            "sound_recorder_test_{}",
+            "sound_recorder_test_{}_{}_{}",
+            std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap_or_default()
-                .subsec_nanos()
+                .subsec_nanos(),
+            n
         ));
         fs::create_dir_all(&dir).unwrap();
         dir
@@ -486,5 +475,87 @@ mod tests {
         }
 
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    // ── profile dispatch ─────────────────────────────────────────────────────
+
+    fn finalize_segment_with_profile(
+        profile: crate::model::AudioOutputProfile,
+        filename: &str,
+    ) -> hound::WavSpec {
+        let dir = make_temp_dir();
+        let (tx, _rx) = mpsc::channel();
+        let mut config = MonitorConfig::default();
+        config.output_profile = profile;
+
+        let sample_rate: u32 = 44100;
+        let min_samples =
+            (sample_rate as f64 * config.min_clip_duration.as_secs_f64()).ceil() as usize + 1000;
+
+        let seg = SoundSegment {
+            samples: vec![1000i16; min_samples],
+            sample_rate,
+            channels: 1,
+            start_timestamp: filename.to_string(),
+        };
+
+        finalize_or_discard(seg, &config, &dir, &tx);
+
+        let path = dir.join(filename);
+        let spec = hound::WavReader::open(&path).unwrap().spec();
+        let _ = fs::remove_dir_all(&dir);
+        spec
+    }
+
+    #[test]
+    fn test_finalize_honors_pcm8_profile() {
+        use crate::model::{AudioOutputProfile, CompressionProfile, SupportedFormat};
+        let spec = finalize_segment_with_profile(
+            AudioOutputProfile {
+                format: SupportedFormat::Wav,
+                compression: CompressionProfile::Pcm8,
+            },
+            "monitor_pcm8.wav",
+        );
+        assert_eq!(spec.sample_format, hound::SampleFormat::Int);
+        assert_eq!(spec.bits_per_sample, 8);
+    }
+
+    #[test]
+    fn test_finalize_honors_pcm24_profile() {
+        use crate::model::{AudioOutputProfile, CompressionProfile, SupportedFormat};
+        let spec = finalize_segment_with_profile(
+            AudioOutputProfile {
+                format: SupportedFormat::Wav,
+                compression: CompressionProfile::Pcm24,
+            },
+            "monitor_pcm24.wav",
+        );
+        assert_eq!(spec.sample_format, hound::SampleFormat::Int);
+        assert_eq!(spec.bits_per_sample, 24);
+    }
+
+    #[test]
+    fn test_finalize_honors_float32_profile() {
+        use crate::model::{AudioOutputProfile, CompressionProfile, SupportedFormat};
+        let spec = finalize_segment_with_profile(
+            AudioOutputProfile {
+                format: SupportedFormat::Wav,
+                compression: CompressionProfile::Float32,
+            },
+            "monitor_float32.wav",
+        );
+        assert_eq!(spec.sample_format, hound::SampleFormat::Float);
+        assert_eq!(spec.bits_per_sample, 32);
+    }
+
+    #[test]
+    fn test_finalize_defaults_to_pcm16() {
+        let spec = finalize_segment_with_profile(
+            crate::model::AudioOutputProfile::default(),
+            "monitor_default.wav",
+        );
+        assert_eq!(spec.sample_format, hound::SampleFormat::Int);
+        assert_eq!(spec.bits_per_sample, 16);
     }
 }
