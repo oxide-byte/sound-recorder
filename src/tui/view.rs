@@ -51,6 +51,18 @@ pub fn render(frame: &mut Frame, ctx: &TuiContext) {
     } else {
         Style::default().fg(Color::DarkGray)
     };
+    
+    let delete_style = if is_idle && !ctx.wav_files.is_empty() {
+        Style::default().fg(Color::Red)
+    } else {
+        Style::default().fg(Color::DarkGray)
+    };
+
+    let amplify_style = if is_idle && !ctx.wav_files.is_empty() {
+        Style::default().fg(Color::Magenta)
+    } else {
+        Style::default().fg(Color::DarkGray)
+    };
 
     let stop_style = if is_recording || is_playing || is_monitoring {
         Style::default()
@@ -66,6 +78,10 @@ pub fn render(frame: &mut Frame, ctx: &TuiContext) {
         Span::styled(" [ Monitor ] ", monitor_style),
         Span::raw("  "),
         Span::styled(" [ Play ] ", play_style),
+        Span::raw("  "),
+        Span::styled(" [ Delete ] ", delete_style),
+        Span::raw("  "),
+        Span::styled(" [ Amplify ] ", amplify_style),
         Span::raw("  "),
         Span::styled(" [ Stop ] ", stop_style),
     ]);
@@ -127,7 +143,7 @@ pub fn render(frame: &mut Frame, ctx: &TuiContext) {
             if ctx.wav_files.is_empty() {
                 "Ready — press 'r' to record or 'm' to monitor"
             } else if is_idle {
-                "Ready — ↑/↓ select  r record  m monitor  p play  q quit"
+                "Ready — ↑/↓ select  r record  m monitor  p play  d delete  a amplify  q quit"
             } else {
                 ""
             }

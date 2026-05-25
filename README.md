@@ -5,9 +5,11 @@
 Current user workflow is TUI-first:
 
 - app startup opens the TUI directly,
-- the UI provides `Record`, `Play`, and `Stop` actions,
+- the UI provides `Record`, `Monitor`, `Play`, `Delete`, `Amplify`, and `Stop` actions,
 - the UI shows a list of stored `WAV` files,
-- each `Record` → `Stop` cycle creates one new `WAV` file.
+- each `Record` → `Stop` cycle creates one new `WAV` file,
+- `Delete` removes the selected recording from disk,
+- `Amplify` scales the volume of the selected recording by 2x.
 
 Detailed target behavior is documented in specs:
 - [001-terminal-audio-recorder-player](specs/001-terminal-audio-recorder-player)
@@ -20,6 +22,8 @@ Detailed target behavior is documented in specs:
 - Launches directly into the TUI on startup.
 - Supports end-to-end recording with `Record` and `Stop` actions.
 - Supports playback of stored `WAV` files via the `Play` action.
+- Supports deleting recordings via the `Delete` action ('d' key).
+- Supports amplifying recordings (2x volume) via the `Amplify` action ('a' key).
 - Displays and refreshes the recordings list in the UI.
 - Continuous (sound-activated) capture via the `Monitor` action.
 - Configurable output audio format and compression profile via `config/audio.conf`.

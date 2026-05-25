@@ -72,6 +72,36 @@ TUI directly with action controls and stored-file list visible.
 
 ---
 
+### User Story 4 - Delete Recording (Priority: P2)
+
+As a user, I can delete a recording from the TUI so I can manage my storage and remove unwanted audio.
+
+**Why this priority**: Managing recordings is a fundamental part of the recording workflow.
+
+**Independent Test**: Select a file in the TUI, press 'd', and confirm the file is removed from the list and from disk.
+
+**Acceptance Scenarios**:
+
+1. **Given** at least one WAV file exists, **When** the user selects it and presses 'd', **Then** the file is deleted.
+2. **Given** a file is deleted, **When** the file list refreshes, **Then** the file is no longer visible in the list.
+
+---
+
+### User Story 5 - Amplify Recording (Priority: P3)
+
+As a user, I can amplify a recording's volume so I can hear quiet recordings more clearly.
+
+**Why this priority**: Provides basic post-processing functionality to improve the utility of recordings.
+
+**Independent Test**: Select a file, press 'a', and confirm that subsequent playback is louder (or check the file modified date).
+
+**Acceptance Scenarios**:
+
+1. **Given** a WAV file is selected, **When** the user presses 'a', **Then** the file is processed and its volume is increased.
+2. **Given** amplification completes, **When** the user plays the file, **Then** the volume is noticeably louder.
+
+---
+
 ### Edge Cases
 
 - User selects `Stop` when no recording is active.
@@ -98,6 +128,8 @@ TUI directly with action controls and stored-file list visible.
   active recording) and show clear user-facing feedback.
 - **FR-008**: When playback or recording fails, TUI MUST present a clear error
   state and allow the user to continue using the interface.
+- **FR-009**: TUI MUST provide a way to delete selected recordings.
+- **FR-010**: TUI MUST provide a way to amplify the volume of selected recordings.
 
 ### Constitution Alignment *(mandatory)*
 
@@ -140,5 +172,3 @@ TUI directly with action controls and stored-file list visible.
 - The stored-files list is sourced from a single application-managed recordings
   location.
 - Single-user local desktop usage is the target context for this release.
-- Advanced editing, tagging, renaming, and deletion of recordings are out of
-  scope for this task.

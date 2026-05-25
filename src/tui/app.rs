@@ -59,6 +59,8 @@ pub fn run_event_loop<B: Backend>(
                     KeyCode::Char('m') => handle_monitor(ctx)?,
                     KeyCode::Char('p') => handle_play(ctx)?,
                     KeyCode::Char('s') => handle_stop(ctx),
+                    KeyCode::Char('d') | KeyCode::Delete => handle_delete(ctx)?,
+                    KeyCode::Char('a') => handle_amplify(ctx)?,
                     KeyCode::Up | KeyCode::Char('k') => navigate_up(ctx),
                     KeyCode::Down | KeyCode::Char('j') => navigate_down(ctx),
                     _ => {}
@@ -341,6 +343,67 @@ fn handle_stop(ctx: &mut TuiContext) {
     }
 }
 
+fn handle_delete(ctx: &mut TuiContext) -> Result<(), AppError> {
+    if !matches!(ctx.app_state, AppState::Idle) {
+        ctx.status_message = Some("Stop activity before deleting".to_string());
+        return Ok(());
+    }
+
+    let Some(index) = ctx.selected_index else {
+        return Ok(());
+    };
+
+    let entry = &ctx.wav_files[index];
+    let path = entry.path.clone();
+    let name = entry.name.clone();
+
+    match std::fs::remove_file(&path) {
+        Ok(_) => {
+            ctx.status_message = Some(format!("Deleted {name}"));
+            ctx.wav_files.remove(index);
+            if ctx.wav_files.is_empty() {
+                ctx.selected_index = None;
+            } else if index >= ctx.wav_files.len() {
+                ctx.selected_index = Some(ctx.wav_files.len() - 1);
+            }
+        }
+        Err(e) => {
+            ctx.status_message = Some(format!("Error deleting {name}: {e}"));
+        }
+    }
+
+    Ok(())
+}
+
+fn handle_amplify(ctx: &mut TuiContext) -> Result<(), AppError> {
+    if !matches!(ctx.app_state, AppState::Idle) {
+        ctx.status_message = Some("Stop activity before amplifying".to_string());
+        return Ok(());
+    }
+
+    let Some(index) = ctx.selected_index else {
+        return Ok(());
+    };
+
+    let entry = &ctx.wav_files[index];
+    let path = entry.path.clone();
+    let name = entry.name.clone();
+
+    ctx.status_message = Some(format!("Amplifying {name}…"));
+
+    // Simple fixed amplification factor of 2.0 for now
+    match audio::process::amplify_wav(&path, 2.0) {
+        Ok(_) => {
+            ctx.status_message = Some(format!("Amplified {name} (2x)"));
+        }
+        Err(e) => {
+            ctx.status_message = Some(format!("Error amplifying {name}: {e}"));
+        }
+    }
+
+    Ok(())
+}
+
 fn navigate_up(ctx: &mut TuiContext) {
     if ctx.wav_files.is_empty() {
         return;
@@ -370,6 +433,30 @@ mod tests {
     use std::path::PathBuf;
     use std::sync::atomic::AtomicBool;
     use std::sync::Arc;
+
+    #[test]
+    fn test_handle_delete_removes_file_and_updates_context() {
+        let temp_dir = std::env::temp_dir().join("test_delete");
+        let _ = std::fs::create_dir_all(&temp_dir);
+        let file_path = temp_dir.join("test.wav");
+        std::fs::write(&file_path, "dummy content").unwrap();
+
+        let mut ctx = TuiContext::new();
+        ctx.wav_files.push(WavFileEntry {
+            name: "test.wav".to_string(),
+            path: file_path.clone(),
+        });
+        ctx.selected_index = Some(0);
+
+        handle_delete(&mut ctx).unwrap();
+
+        assert!(ctx.wav_files.is_empty());
+        assert!(ctx.selected_index.is_none());
+        assert!(!file_path.exists());
+        assert_eq!(ctx.status_message.as_deref(), Some("Deleted test.wav"));
+        
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
 
     fn make_monitoring_ctx() -> (TuiContext, mpsc::Sender<MonitorEvent>) {
         let (tx, rx) = mpsc::channel::<MonitorEvent>();
