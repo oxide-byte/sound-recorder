@@ -132,12 +132,38 @@ pub enum AppState {
     Monitoring(MonitoringHandle),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PlayMode {
+    Single,
+    Continuous,
+    Loop,
+}
+
+impl PlayMode {
+    pub fn next(&self) -> Self {
+        match self {
+            PlayMode::Single => PlayMode::Continuous,
+            PlayMode::Continuous => PlayMode::Loop,
+            PlayMode::Loop => PlayMode::Single,
+        }
+    }
+
+    pub fn indicator(&self) -> &'static str {
+        match self {
+            PlayMode::Single => "[ ]",
+            PlayMode::Continuous => "[C]",
+            PlayMode::Loop => "[L]",
+        }
+    }
+}
+
 pub struct TuiContext {
     pub selected_index: Option<usize>,
     pub wav_files: Vec<WavFileEntry>,
     pub status_message: Option<String>,
     pub app_state: AppState,
     pub defaults: Option<crate::config::AudioDefaultsConfig>,
+    pub play_mode: PlayMode,
 }
 
 impl TuiContext {
@@ -148,6 +174,7 @@ impl TuiContext {
             status_message: None,
             app_state: AppState::Idle,
             defaults: None,
+            play_mode: PlayMode::Single,
         }
     }
 }

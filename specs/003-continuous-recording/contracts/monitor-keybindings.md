@@ -14,7 +14,8 @@
 | `s`     | Recording                      | Stop manual recording (existing — unchanged)    |
 | `s`     | Playing                        | Stop playback (existing — unchanged)            |
 | `r`     | Idle                           | Start manual recording (existing — unchanged)   |
-| `p`     | Idle (with file selected)      | Start playback (existing — unchanged)           |
+| `p`     | Idle (with file selected)      | Start playback (existing — updated)           |
+| `p`     | Playing                        | Cycle Playback Mode (Single → Continuous → Loop → Single) |
 | `q`/Esc | Idle only                      | Quit (existing — unchanged)                     |
 | `↑`/`k` | Any                            | Navigate list up (existing — unchanged)         |
 | `↓`/`j` | Any                            | Navigate list down (existing — unchanged)       |
@@ -42,7 +43,7 @@
 | Monitoring (Listening)           | `"Monitoring — listening for sound…  's' to stop"`              |
 | Monitoring (Capturing)           | `"Capturing — sound detected, recording segment…  's' to stop"` |
 | Recording                        | `"Recording… press 's' to stop"` (existing — unchanged)         |
-| Playing                          | `"Playing {filename} — press 's' to stop"` (existing — unchanged)|
+| Playing                          | `"Playing {filename} {mode_indicator} — press 's' to stop"` (updated)|
 
 ---
 

@@ -30,7 +30,7 @@ pub struct MonitorConfig {
 impl Default for MonitorConfig {
     fn default() -> Self {
         Self {
-            threshold_fraction: 0.02,
+            threshold_fraction: 0.01,
             silence_timeout: Duration::from_millis(1500),
             pre_roll: Duration::from_millis(400),
             min_clip_duration: Duration::from_millis(500),

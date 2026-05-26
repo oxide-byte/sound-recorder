@@ -29,26 +29,23 @@ new WAV file appears in the TUI file list and on disk.
 
 ---
 
-### User Story 2 - Play Stored WAV Files from TUI (Priority: P2)
+### User Story 2 - Play Stored WAV Files and Toggle Playback Modes (Priority: P2)
 
-As a user, I can select and play a stored WAV file from the TUI so I can verify
-recordings without leaving the interface.
+As a user, I can select and play a stored WAV file from the TUI, and cycle through playback modes (Single, Continuous, Loop), so I can listen to recordings individually or as a sequence.
 
-**Why this priority**: Playback is the second essential workflow and validates
-that captured recordings are useful.
+**Why this priority**: Playback is the second essential workflow. Adding playback modes enhances usability for reviewing multiple recordings.
 
-**Independent Test**: Start the app with at least one WAV file present, select a
-file in the list, choose `Play`, and confirm playback starts with clear status
-feedback.
+**Independent Test**: Start the app with at least one WAV file present, select a file, choose `Play`. While playing, press 'p' again and verify the mode indicator changes to `[C]`. Press 'p' again and verify it changes to `[L]`. Verify that in `[C]` and `[L]` modes, the next track starts automatically when the current one finishes.
 
 **Acceptance Scenarios**:
 
-1. **Given** at least one WAV file exists in storage, **When** the user selects
-   a listed file and chooses `Play`, **Then** the file playback begins.
-2. **Given** playback is running, **When** playback completes, **Then** the UI
-   returns to idle-ready state.
-3. **Given** the selected file cannot be played, **When** the user chooses
-   `Play`, **Then** the UI shows a clear error message and remains usable.
+1. **Given** at least one WAV file exists, **When** the user selects it and chooses `Play`, **Then** the file playback begins in Single mode (`[ Play [ ]]`).
+2. **Given** playback is running, **When** the user presses 'p' again, **Then** the playback mode cycles to Continuous (`[ Play [C]]`).
+3. **Given** playback is in Continuous mode, **When** the user presses 'p' again, **Then** the playback mode cycles to Loop (`[ Play [L]]`).
+4. **Given** playback is in Loop mode, **When** the user presses 'p' again, **Then** the playback mode cycles back to Single (`[ Play [ ]]`).
+5. **Given** playback is in Continuous mode, **When** the current track finishes, **Then** the system automatically starts playing the next track in the list.
+6. **Given** playback is in Loop mode, **When** the last track in the list finishes, **Then** the system automatically starts playing the first track in the list.
+7. **Given** the selected file cannot be played, **When** the user chooses `Play`, **Then** the UI shows a clear error message and remains usable.
 
 ---
 
@@ -117,7 +114,7 @@ As a user, I can amplify a recording's volume so I can hear quiet recordings mor
 - **FR-001**: System MUST run as a TUI-only application for normal user
   interaction.
 - **FR-002**: `main` MUST only initialize and start the TUI workflow.
-- **FR-003**: TUI MUST provide visible `Record`, `Play`, and `Stop` controls.
+- **FR-003**: TUI MUST provide visible `Record`, `Play` (with mode indicator), and `Stop` controls.
 - **FR-004**: TUI MUST display a list of stored WAV files available for
   playback.
 - **FR-005**: System MUST create one new WAV file for each completed
@@ -125,7 +122,10 @@ As a user, I can amplify a recording's volume so I can hear quiet recordings mor
 - **FR-006**: Newly created WAV files MUST appear in the stored-files list
   without requiring application restart.
 - **FR-007**: TUI MUST prevent invalid actions (for example, `Stop` without an
-  active recording) and show clear user-facing feedback.
+  active recording or playback) and show clear user-facing feedback.
+- **FR-011**: System MUST support cycling playback modes (Single, Continuous, Loop) by pressing 'p' during active playback.
+- **FR-012**: System MUST automatically advance to the next recording in Continuous and Loop modes upon track completion.
+- **FR-013**: System MUST restart from the first recording when the last one ends if Loop mode is active.
 - **FR-008**: When playback or recording fails, TUI MUST present a clear error
   state and allow the user to continue using the interface.
 - **FR-009**: TUI MUST provide a way to delete selected recordings.

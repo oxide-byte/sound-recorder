@@ -10,8 +10,8 @@ use ratatui::backend::Backend;
 use crate::audio;
 use crate::error::AppError;
 use crate::model::{
-    AppState, MonitorEvent, MonitoringHandle, MonitoringSubState, PlaybackHandle, RecordingHandle,
-    TuiContext, WavFileEntry,
+    AppState, MonitorEvent, MonitoringHandle, MonitoringSubState, PlayMode, PlaybackHandle,
+    RecordingHandle, TuiContext, WavFileEntry,
 };
 
 pub fn scan_wav_files(dir: &Path) -> Vec<WavFileEntry> {
@@ -155,8 +155,31 @@ fn check_audio_completion(ctx: &mut TuiContext) {
             return;
         };
         let _ = handle.thread.join();
+        
         match result {
-            Ok(()) => ctx.status_message = None,
+            Ok(()) => {
+                if ctx.play_mode == PlayMode::Single {
+                    ctx.status_message = None;
+                } else {
+                    // Continuous or Loop playback
+                    if let Some(current_index) = ctx.selected_index {
+                        let next_index = current_index + 1;
+                        if next_index < ctx.wav_files.len() {
+                            ctx.selected_index = Some(next_index);
+                            // Start next track
+                            let _ = handle_play(ctx);
+                        } else if ctx.play_mode == PlayMode::Loop && !ctx.wav_files.is_empty() {
+                            ctx.selected_index = Some(0);
+                            // Start first track
+                            let _ = handle_play(ctx);
+                        } else {
+                            ctx.status_message = None;
+                        }
+                    } else {
+                        ctx.status_message = None;
+                    }
+                }
+            }
             Err(e) => ctx.status_message = Some(format!("Playback error: {e}")),
         }
         return;
@@ -294,6 +317,21 @@ fn handle_play(ctx: &mut TuiContext) -> Result<(), AppError> {
         ctx.status_message = Some("Stop monitoring before playback".to_string());
         return Ok(());
     }
+
+    if let AppState::Playing(_) = &ctx.app_state {
+        ctx.play_mode = ctx.play_mode.next();
+        if let Some(index) = ctx.selected_index {
+            if let Some(entry) = ctx.wav_files.get(index) {
+                let filename = entry.name.clone();
+                ctx.status_message = Some(format!(
+                    "Playing {filename} {} — press 's' to stop",
+                    ctx.play_mode.indicator()
+                ));
+            }
+        }
+        return Ok(());
+    }
+
     if !matches!(ctx.app_state, AppState::Idle) {
         return Ok(());
     }
@@ -322,7 +360,10 @@ fn handle_play(ctx: &mut TuiContext) -> Result<(), AppError> {
         thread,
         source_path: wav_path,
     });
-    ctx.status_message = Some(format!("Playing {filename} — press 's' to stop"));
+    ctx.status_message = Some(format!(
+        "Playing {filename} {} — press 's' to stop",
+        ctx.play_mode.indicator()
+    ));
     Ok(())
 }
 

@@ -21,7 +21,8 @@ Detailed target behavior is documented in specs:
 
 - Launches directly into the TUI on startup.
 - Supports end-to-end recording with `Record` and `Stop` actions.
-- Supports playback of stored `WAV` files via the `Play` action.
+- Supports playback of stored `WAV` files via the `Play` action ('p' key).
+- Supports cycling playback modes (Single, Continuous, Loop) by pressing 'p' during playback.
 - Supports deleting recordings via the `Delete` action ('d' key).
 - Supports amplifying recordings (2x volume) via the `Amplify` action ('a' key).
 - Displays and refreshes the recordings list in the UI.

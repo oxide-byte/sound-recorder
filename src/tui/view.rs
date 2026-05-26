@@ -72,12 +72,15 @@ pub fn render(frame: &mut Frame, ctx: &TuiContext) {
         Style::default().fg(Color::DarkGray)
     };
 
+    let play_label = format!(" [ Play {} ] ", ctx.play_mode.indicator());
+    let play_line_span = Span::styled(play_label, play_style);
+
     let button_line = Line::from(vec![
         Span::styled(" [ Record ] ", record_style),
         Span::raw("  "),
         Span::styled(" [ Monitor ] ", monitor_style),
         Span::raw("  "),
-        Span::styled(" [ Play ] ", play_style),
+        play_line_span,
         Span::raw("  "),
         Span::styled(" [ Delete ] ", delete_style),
         Span::raw("  "),
