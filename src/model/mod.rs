@@ -89,6 +89,7 @@ impl Default for AudioOutputProfile {
 pub struct WavFileEntry {
     pub name: String,
     pub path: PathBuf,
+    pub created_at: String,
 }
 
 pub struct RecordingHandle {

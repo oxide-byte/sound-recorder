@@ -1,8 +1,9 @@
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc};
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
+use chrono::{DateTime, Local};
 use crossterm::event::{self, Event, KeyCode};
 use ratatui::Terminal;
 use ratatui::backend::Backend;
@@ -26,9 +27,19 @@ pub fn scan_wav_files(dir: &Path) -> Vec<WavFileEntry> {
                 .map(|ext| ext.eq_ignore_ascii_case("wav"))
                 .unwrap_or(false)
         })
-        .map(|e| WavFileEntry {
-            name: e.file_name().to_string_lossy().into_owned(),
-            path: e.path(),
+        .map(|e| {
+            let path = e.path();
+            let metadata = e.metadata().ok();
+            let created_at = metadata
+                .and_then(|m| m.created().ok())
+                .unwrap_or_else(SystemTime::now);
+            let dt: DateTime<Local> = created_at.into();
+
+            WavFileEntry {
+                name: e.file_name().to_string_lossy().into_owned(),
+                path,
+                created_at: dt.format("%Y-%m-%d %H:%M:%S").to_string(),
+            }
         })
         .collect();
     files.sort_by(|a, b| b.name.cmp(&a.name));
@@ -486,6 +497,7 @@ mod tests {
         ctx.wav_files.push(WavFileEntry {
             name: "test.wav".to_string(),
             path: file_path.clone(),
+            created_at: "2026-05-27 17:57:00".to_string(),
         });
         ctx.selected_index = Some(0);
 
@@ -603,6 +615,26 @@ mod tests {
     }
 
     // ── US3: defaults gate ────────────────────────────────────────────────────
+
+    #[test]
+    fn test_scan_wav_files_populates_created_at() {
+        let temp_dir = std::env::temp_dir().join("sound_recorder_test");
+        let _ = std::fs::remove_dir_all(&temp_dir);
+        std::fs::create_dir_all(&temp_dir).unwrap();
+
+        let file_path = temp_dir.join("test.wav");
+        std::fs::write(&file_path, b"dummy wav data").unwrap();
+
+        let files = scan_wav_files(&temp_dir);
+        assert_eq!(files.len(), 1);
+        assert_eq!(files[0].name, "test.wav");
+        // Check if created_at is not empty and has expected format (partial check)
+        assert!(!files[0].created_at.is_empty());
+        assert!(files[0].created_at.contains("-"));
+        assert!(files[0].created_at.contains(":"));
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
 
     #[test]
     fn test_handle_record_is_gated_when_defaults_missing() {

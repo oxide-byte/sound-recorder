@@ -12,7 +12,7 @@ Configuration parameters for a monitoring session. Passed by value to the monito
 
 | Field                | Type       | Default     | Description                                                                 |
 |----------------------|------------|-------------|-----------------------------------------------------------------------------|
-| `threshold_fraction` | `f32`      | `0.02`      | Fraction of `i16::MAX` used as the sound-detection amplitude cutoff (0–1). |
+| `threshold_fraction` | `f32`      | `0.08`      | Fraction of `i16::MAX` used as the sound-detection amplitude cutoff (0–1). |
 | `silence_timeout`    | `Duration` | 1 500 ms    | How long silence must last after sound before a segment is finalized.       |
 | `pre_roll`           | `Duration` | 400 ms      | Length of the rolling pre-roll buffer prepended to each new segment.        |
 | `min_clip_duration`  | `Duration` | 500 ms      | Minimum finalized segment duration; segments below this are discarded.      |

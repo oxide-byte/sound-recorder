@@ -68,8 +68,11 @@ Represents one file in the TUI file list. The list is rebuilt from the recording
 |-------|------|-------------|
 | `name` | `String` | Filename only (e.g., `recording_20260514_120000_000.wav`) |
 | `path` | `PathBuf` | Absolute path to the WAV file |
+| `created_at` | `String` | Human-readable creation timestamp (e.g., `2026-05-27 17:57:00`) |
 
-**Ordering**: Sorted lexicographically by `name` descending (most recent first, given timestamp naming).
+**UI / Columns**: The TUI now renders a table with two columns: `Name` and `Created At` (see view rendering).
+
+**Ordering**: Files are still sorted lexicographically by `name` descending (most recent first, given timestamp naming).
 
 **Validation**: Only files with `.wav` extension are included. Non-WAV entries in the directory are silently ignored.
 

@@ -12,10 +12,10 @@ Current user workflow is TUI-first:
 - `Amplify` scales the volume of the selected recording by 2x.
 
 Detailed target behavior is documented in specs:
-- [001-terminal-audio-recorder-player](specs/001-terminal-audio-recorder-player)
-- [002-tui-recorder-ui](specs/002-tui-recorder-ui)`specs/002-tui-recorder-ui/spec.md`
-- [003-continuous-recording](specs/003-continuous-recording)`specs/specs/003-continuous-recording)003-tui-recorder-ui/spec.md`
-- [004-audio-format-compression](specs/004-audio-format-compression)
+- [001-terminal-audio-recorder-player](specs/001-terminal-audio-recorder-player/spec.md)
+- [002-tui-recorder-ui](specs/002-tui-recorder-ui/spec.md)
+- [003-continuous-recording](specs/003-continuous-recording/spec.md)
+- [004-audio-format-compression](specs/004-audio-format-compression/spec.md)
 
 ## Features
 

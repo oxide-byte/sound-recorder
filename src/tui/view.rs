@@ -2,7 +2,7 @@ use ratatui::Frame;
 use ratatui::layout::{Constraint, Direction, Layout};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, List, ListItem, ListState, Paragraph};
+use ratatui::widgets::{Block, Borders, Paragraph, Table, Row, TableState};
 
 use crate::model::{AppState, MonitoringSubState, TuiContext};
 
@@ -101,7 +101,7 @@ pub fn render(frame: &mut Frame, ctx: &TuiContext) {
         Paragraph::new(button_line).block(Block::default().borders(Borders::ALL).title(title));
     frame.render_widget(buttons, chunks[0]);
 
-    let items: Vec<ListItem> = ctx
+    let rows: Vec<Row> = ctx
         .wav_files
         .iter()
         .enumerate()
@@ -123,21 +123,32 @@ pub fn render(frame: &mut Frame, ctx: &TuiContext) {
             } else {
                 Style::default()
             };
-            ListItem::new(entry.name.clone()).style(style)
+            Row::new(vec![entry.name.clone(), entry.created_at.clone()]).style(style)
         })
         .collect();
 
-    let mut list_state = ListState::default();
-    list_state.select(ctx.selected_index);
+    let mut table_state = TableState::default();
+    table_state.select(ctx.selected_index);
 
-    let list = List::new(items)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(" Recordings (↑/↓ to select) "),
-        )
-        .highlight_symbol("▸ ");
-    frame.render_stateful_widget(list, chunks[1], &mut list_state);
+    let table = Table::new(
+        rows,
+        [
+            Constraint::Percentage(70),
+            Constraint::Percentage(30),
+        ],
+    )
+    .block(
+        Block::default()
+            .borders(Borders::ALL)
+            .title(" Recordings (↑/↓ to select) "),
+    )
+    .header(
+        Row::new(vec!["Name", "Created At"])
+            .style(Style::default().add_modifier(Modifier::BOLD))
+            .bottom_margin(0),
+    )
+    .highlight_symbol("▸ ");
+    frame.render_stateful_widget(table, chunks[1], &mut table_state);
 
     let status_text = if is_capturing {
         "Capturing — sound detected, recording segment…  's' to stop"

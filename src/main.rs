@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 mod audio;
 mod config;
 mod error;
