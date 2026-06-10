@@ -379,6 +379,8 @@ fn handle_play(ctx: &mut TuiContext) -> Result<(), AppError> {
 }
 
 fn handle_stop(ctx: &mut TuiContext) {
+    ctx.play_mode = PlayMode::Single;
+
     match &ctx.app_state {
         AppState::Recording(h) => {
             h.stop_flag.store(true, Ordering::Relaxed);
