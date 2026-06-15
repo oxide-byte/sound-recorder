@@ -63,7 +63,7 @@ fn play_until_stop(stop_flag: Arc<AtomicBool>, file: &std::path::Path) -> Result
             let state = Arc::clone(&state);
             let samples = samples.clone();
             device.build_output_stream(
-                &config.clone().into(),
+                config.clone().into(),
                 move |data: &mut [i16], _| {
                     write_output_data(
                         data,
@@ -83,7 +83,7 @@ fn play_until_stop(stop_flag: Arc<AtomicBool>, file: &std::path::Path) -> Result
             let state = Arc::clone(&state);
             let samples = samples.clone();
             device.build_output_stream(
-                &config.clone().into(),
+                config.clone().into(),
                 move |data: &mut [u16], _| {
                     write_output_data(
                         data,
@@ -103,7 +103,7 @@ fn play_until_stop(stop_flag: Arc<AtomicBool>, file: &std::path::Path) -> Result
             let state = Arc::clone(&state);
             let samples = samples.clone();
             device.build_output_stream(
-                &config.clone().into(),
+                config.clone().into(),
                 move |data: &mut [f32], _| {
                     write_output_data(
                         data,

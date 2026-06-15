@@ -30,10 +30,10 @@ pub struct MonitorConfig {
 impl Default for MonitorConfig {
     fn default() -> Self {
         Self {
-            threshold_fraction: 0.08,
-            silence_timeout: Duration::from_millis(1500),
-            pre_roll: Duration::from_millis(400),
-            min_clip_duration: Duration::from_millis(500),
+            threshold_fraction: 0.078,
+            silence_timeout: Duration::from_millis(2500),
+            pre_roll: Duration::from_millis(2500),
+            min_clip_duration: Duration::from_millis(1000),
             output_profile: AudioOutputProfile::default(),
         }
     }
@@ -191,7 +191,7 @@ fn run_monitor(
         let tx_err = tx.clone();
         match stream_config.sample_format() {
             cpal::SampleFormat::I16 => device.build_input_stream(
-                &stream_config.clone().into(),
+                stream_config.clone().into(),
                 move |data: &[i16], _| {
                     if let Ok(mut b) = buf.lock() {
                         b.extend_from_slice(data);
@@ -206,7 +206,7 @@ fn run_monitor(
             cpal::SampleFormat::U16 => {
                 let tx_err2 = tx.clone();
                 device.build_input_stream(
-                    &stream_config.clone().into(),
+                    stream_config.clone().into(),
                     move |data: &[u16], _| {
                         if let Ok(mut b) = buf.lock() {
                             b.extend(data.iter().map(|s| (*s as i32 - 32_768) as i16));
@@ -223,7 +223,7 @@ fn run_monitor(
             cpal::SampleFormat::F32 => {
                 let tx_err3 = tx.clone();
                 device.build_input_stream(
-                    &stream_config.clone().into(),
+                    stream_config.clone().into(),
                     move |data: &[f32], _| {
                         if let Ok(mut b) = buf.lock() {
                             b.extend(

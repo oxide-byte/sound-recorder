@@ -103,7 +103,7 @@ fn record_microphone_until_stop(
         cpal::SampleFormat::I16 => {
             let buf = Arc::clone(&captured_samples);
             device.build_input_stream(
-                &config.clone().into(),
+                config.clone().into(),
                 move |data: &[i16], _| {
                     if let Ok(mut b) = buf.lock() {
                         b.extend_from_slice(data);
@@ -116,7 +116,7 @@ fn record_microphone_until_stop(
         cpal::SampleFormat::U16 => {
             let buf = Arc::clone(&captured_samples);
             device.build_input_stream(
-                &config.clone().into(),
+                config.clone().into(),
                 move |data: &[u16], _| {
                     if let Ok(mut b) = buf.lock() {
                         b.extend(data.iter().map(|s| (*s as i32 - 32_768) as i16));
@@ -129,7 +129,7 @@ fn record_microphone_until_stop(
         cpal::SampleFormat::F32 => {
             let buf = Arc::clone(&captured_samples);
             device.build_input_stream(
-                &config.clone().into(),
+                config.clone().into(),
                 move |data: &[f32], _| {
                     if let Ok(mut b) = buf.lock() {
                         b.extend(data.iter().map(|s| {
